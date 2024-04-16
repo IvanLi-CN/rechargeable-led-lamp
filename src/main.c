@@ -20,73 +20,122 @@ enum {
   BTN_EN = 0b1000,
 } typedef btn_t;
 
+enum {
+  BTN_MARK_COLOR_TEMPERATURE = 0b01,
+  BTN_MARK_LUMINANCE = 0b10,
+} typedef btn_mark_t;
+
 uint32_t count;
 
 u8 color_temperature = 127;
-int8_t color_temperature_step = 0;
-u32 color_temperaature_btn_downed_at = 0;
+u32 color_temperature_btn_downed_at = 0;
 
 u8 luminance = 127;
-int8_t luminance_step = 0;
 u32 luminance_btn_downed_at = 0;
+
+btn_mark_t tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
 
 void EXTI7_0_IRQHandler(void) __attribute__((interrupt));
 void SysTick_Handler(void) __attribute__((interrupt));
+void btns_down(btn_mark_t btn_mark);
+
+void set_btn_long_press_irq_tick() {
+  u32 ct_w = !(GPIOC->INDR & GPIO_Pin_0);
+  u32 ct_c = !(GPIOC->INDR & GPIO_Pin_1);
+  u32 l_l = !(GPIOC->INDR & GPIO_Pin_2);
+  u32 l_d = !(GPIOC->INDR & GPIO_Pin_3);
+
+  if ((ct_w || ct_c) && (l_l || l_d)) {
+    if (color_temperature_btn_downed_at < luminance_btn_downed_at) {
+      tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
+      SysTick->CMP = color_temperature_btn_downed_at + 200000;
+    } else {
+      tick_btn_mark = BTN_MARK_LUMINANCE;
+      SysTick->CMP = luminance_btn_downed_at + 200000;
+    }
+
+    if (SysTick->CMP < SysTick->CNT) {
+      btns_down(tick_btn_mark);
+    }
+    return;
+  }
+
+  if (ct_w || ct_c) {
+    tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
+    SysTick->CMP = color_temperature_btn_downed_at + 200000;
+  } else if (l_l || l_d) {
+    tick_btn_mark = BTN_MARK_LUMINANCE;
+    SysTick->CMP = luminance_btn_downed_at + 200000;
+  }
+}
+
+void btns_down(btn_mark_t btn_mark) {
+  if (btn_mark == BTN_MARK_COLOR_TEMPERATURE) {
+    if ((GPIOC->INDR & GPIO_Pin_0) == 0) {
+      if (color_temperature > 0) {
+        color_temperature--;
+      }
+      color_temperature_btn_downed_at = SysTick->CNT;
+      set_btn_long_press_irq_tick();
+    }
+
+    if ((GPIOC->INDR & GPIO_Pin_1) == 0) {
+      if (color_temperature < 255) {
+        color_temperature++;
+      }
+      color_temperature_btn_downed_at = SysTick->CNT;
+      set_btn_long_press_irq_tick();
+    }
+  } else if (btn_mark == BTN_MARK_LUMINANCE) {
+    if ((GPIOC->INDR & GPIO_Pin_2) == 0) {
+      if (luminance > 0) {
+        luminance--;
+      }
+      luminance_btn_downed_at = SysTick->CNT;
+      set_btn_long_press_irq_tick();
+    }
+
+    if ((GPIOC->INDR & GPIO_Pin_3) == 0) {
+      if (luminance < 255) {
+        luminance++;
+      }
+      luminance_btn_downed_at = SysTick->CNT;
+      set_btn_long_press_irq_tick();
+    }
+  }
+
+  printf("color_temperature: %d, luminance: %d. ticks: %lu \n",
+         color_temperature, luminance, SysTick->CNT);
+}
 
 void EXTI7_0_IRQHandler(void) {
-  if (EXTI->INTFR & EXTI_FTENR_TR0) {
-    color_temperature_step = -1;
-  } else if (EXTI->INTFR & EXTI_FTENR_TR1) {
-    color_temperature_step = 1;
-  } else {
-    color_temperature_step = 0;
+  if (EXTI->INTFR & EXTI_INTENR_MR0) {
+    btns_down(BTN_MARK_COLOR_TEMPERATURE);
+  }
+  if (EXTI->INTFR & EXTI_INTENR_MR1) {
+    btns_down(BTN_MARK_COLOR_TEMPERATURE);
   }
 
-  if (EXTI->INTFR & EXTI_FTENR_TR2) {
-    luminance_step = -1;
-  } else if (EXTI->INTFR & EXTI_FTENR_TR3) {
-    luminance_step = 1;
-  } else {
-    luminance_step = 0;
+  if (EXTI->INTFR & EXTI_INTENR_MR2) {
+    btns_down(BTN_MARK_LUMINANCE);
   }
-
-  color_temperature += color_temperature_step;
-  luminance += luminance_step;
+  if (EXTI->INTFR & EXTI_INTENR_MR3) {
+    btns_down(BTN_MARK_LUMINANCE);
+  }
 
   EXTI->INTFR =
       EXTI_INTENR_MR0 | EXTI_INTENR_MR1 | EXTI_INTENR_MR2 | EXTI_INTENR_MR3;
 }
 
 void SysTick_Handler(void) {
-  if (EXTI->INTFR & EXTI_FTENR_TR0) {
-    color_temperature_step = -1;
-  } else if (EXTI->INTFR & EXTI_FTENR_TR1) {
-    color_temperature_step = 1;
-  } else {
-    color_temperature_step = 0;
-  }
-
-  if (EXTI->INTFR & EXTI_FTENR_TR2) {
-    luminance_step = -1;
-  } else if (EXTI->INTFR & EXTI_FTENR_TR3) {
-    luminance_step = 1;
-  } else {
-    luminance_step = 0;
-  }
-
-  color_temperature += color_temperature_step;
-  luminance += luminance_step;
-
-  EXTI->INTFR =
-      EXTI_INTENR_MR0 | EXTI_INTENR_MR1 | EXTI_INTENR_MR2 | EXTI_INTENR_MR3;
+  SysTick->SR = 0;
+  printf("SysTick\n");
+  btns_down(tick_btn_mark);
 }
-
-void set_btn_long_press_timer(btn_t btn) {}
 
 void init_systick() {
   // Enable SysTick
-  SysTick->CTLR = SYSTICK_CTLR_SWIE | SYSTICK_CTLR_STRE | SYSTICK_CTLR_STIE |
-                  SYSTICK_CTLR_STE;
+  SysTick->CTLR = SYSTICK_CTLR_SWIE | SYSTICK_CTLR_STIE | SYSTICK_CTLR_STE;
 }
 
 void init_tim1() {
@@ -133,17 +182,23 @@ void init_btns() {
   // Enable GPIOC, GPIOD, TIM1 and AFIO
   RCC->APB2PCENR |= RCC_APB2Periph_GPIOC | RCC_APB2Periph_AFIO;
 
-  // GPIO C0. C1 Push-Pull
+  // GPIO C0. C1, C2, C3 Push-Pull
   GPIOC->CFGLR |= (GPIO_Speed_In | GPIO_CNF_IN_PUPD) << (4 * 0);
   GPIOC->CFGLR |= (GPIO_Speed_In | GPIO_CNF_IN_PUPD) << (4 * 1);
+  GPIOC->CFGLR |= (GPIO_Speed_In | GPIO_CNF_IN_PUPD) << (4 * 2);
+  GPIOC->CFGLR |= (GPIO_Speed_In | GPIO_CNF_IN_PUPD) << (4 * 3);
 
-  // Enable interruptions for PC0, PC1
+  // Enable interruptions for PC0, PC1, PC2, PC3
   AFIO->EXTICR |= 2 << 0;
   AFIO->EXTICR |= 2 << 2;
+  AFIO->EXTICR |= 2 << 4;
+  AFIO->EXTICR |= 2 << 6;
 
   // Enable interruptions
-  EXTI->INTENR |= EXTI_INTENR_MR0 | EXTI_INTENR_MR1;
-  EXTI->FTENR |= EXTI_FTENR_TR0 | EXTI_FTENR_TR1;
+  EXTI->INTENR |=
+      EXTI_INTENR_MR0 | EXTI_INTENR_MR1 | EXTI_INTENR_MR2 | EXTI_INTENR_MR3;
+  EXTI->FTENR |=
+      EXTI_FTENR_TR0 | EXTI_FTENR_TR1 | EXTI_FTENR_TR2 | EXTI_FTENR_TR3;
 
   // Enable interrupt handler for EXTI7_0
   NVIC_EnableIRQ(EXTI7_0_IRQn);
@@ -166,9 +221,6 @@ int main() {
     // u8 gpio_c1 = GPIOC->INDR & GPIO_INDR_IDR1 >> 1;
 
     // output bits
-    printf("GPIOC: %s%s. irq count: %ld \n",
-           GPIOC->INDR & GPIO_INDR_IDR0 ? "1" : "0",
-           GPIOC->INDR & GPIO_INDR_IDR1 ? "1" : "0", count);
 
     Delay_Ms(250);
   }
