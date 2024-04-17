@@ -48,10 +48,10 @@ void set_btn_long_press_irq_tick() {
   if ((ct_w || ct_c) && (l_l || l_d)) {
     if (color_temperature_btn_downed_at < luminance_btn_downed_at) {
       tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
-      SysTick->CMP = color_temperature_btn_downed_at + 200000;
+      SysTick->CMP = color_temperature_btn_downed_at + 100000;
     } else {
       tick_btn_mark = BTN_MARK_LUMINANCE;
-      SysTick->CMP = luminance_btn_downed_at + 200000;
+      SysTick->CMP = luminance_btn_downed_at + 1000000;
     }
 
     if (SysTick->CMP < SysTick->CNT) {
@@ -62,10 +62,10 @@ void set_btn_long_press_irq_tick() {
 
   if (ct_w || ct_c) {
     tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
-    SysTick->CMP = color_temperature_btn_downed_at + 200000;
+    SysTick->CMP = color_temperature_btn_downed_at + 100000;
   } else if (l_l || l_d) {
     tick_btn_mark = BTN_MARK_LUMINANCE;
-    SysTick->CMP = luminance_btn_downed_at + 200000;
+    SysTick->CMP = luminance_btn_downed_at + 100000;
   }
 }
 
@@ -104,8 +104,7 @@ void btns_down(btn_mark_t btn_mark) {
     }
   }
 
-  printf("color_temperature: %d, luminance: %d. ticks: %lu \n",
-         color_temperature, luminance, SysTick->CNT);
+  TIM1->CH1CVR = luminance;
 }
 
 void EXTI7_0_IRQHandler(void) {
@@ -129,7 +128,6 @@ void EXTI7_0_IRQHandler(void) {
 
 void SysTick_Handler(void) {
   SysTick->SR = 0;
-  printf("SysTick\n");
   btns_down(tick_btn_mark);
 }
 
@@ -143,8 +141,8 @@ void init_tim1() {
 
   // PD0 is T1CH1N, 10MHz Output alt func, push-pull
   GPIOD->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 0);
-  // PD1 is T1CH1N, 10MHz Output alt func, push-pull
-  GPIOD->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 1);
+  // PD2 is T1CH1, 10MHz Output alt func, push-pull
+  GPIOD->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 2);
 
   // Reset TIM1 to init all regs
   RCC->APB2PRSTR |= RCC_APB2Periph_TIM1;
@@ -161,6 +159,9 @@ void init_tim1() {
 
   // Reload immediately
   TIM1->SWEVGR |= TIM_UG;
+
+  // Enable CH1 output, positive pol
+  TIM1->CCER |= TIM_CC1E | TIM_CC1P;
 
   // Enable CH1N output, positive pol
   TIM1->CCER |= TIM_CC1NE | TIM_CC1NP;
@@ -221,6 +222,9 @@ int main() {
     // u8 gpio_c1 = GPIOC->INDR & GPIO_INDR_IDR1 >> 1;
 
     // output bits
+
+    printf("color_temperature: %d, luminance: %d. ticks: %lu \n",
+           color_temperature, luminance, SysTick->CNT);
 
     Delay_Ms(250);
   }
