@@ -27,10 +27,10 @@ enum {
 
 uint32_t count;
 
-u8 color_temperature = 127;
+u16 color_temperature = 127;
 u32 color_temperature_btn_downed_at = 0;
 
-u8 luminance = 127;
+u16 luminance = 127;
 u32 luminance_btn_downed_at = 0;
 
 btn_mark_t tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
@@ -51,7 +51,7 @@ void set_btn_long_press_irq_tick() {
       SysTick->CMP = color_temperature_btn_downed_at + 100000;
     } else {
       tick_btn_mark = BTN_MARK_LUMINANCE;
-      SysTick->CMP = luminance_btn_downed_at + 1000000;
+      SysTick->CMP = luminance_btn_downed_at + 100000;
     }
 
     if (SysTick->CMP < SysTick->CNT) {
@@ -80,7 +80,7 @@ void btns_down(btn_mark_t btn_mark) {
     }
 
     if ((GPIOC->INDR & GPIO_Pin_1) == 0) {
-      if (color_temperature < 255) {
+      if (color_temperature < 256) {
         color_temperature++;
       }
       color_temperature_btn_downed_at = SysTick->CNT;
@@ -104,7 +104,8 @@ void btns_down(btn_mark_t btn_mark) {
     }
   }
 
-  TIM1->CH1CVR = luminance;
+  TIM1->CH1CVR = color_temperature;
+  TIM2->CH1CVR = luminance;
 }
 
 void EXTI7_0_IRQHandler(void) {
@@ -152,7 +153,7 @@ void init_tim1() {
   // SMCFGR: default clk input is CK_INT
 
   // Prescaler
-  TIM1->PSC = 0x0f00;
+  TIM1->PSC = 0x000f;
 
   // Auto Reload - sets period
   TIM1->ATRLR = 255;
@@ -170,13 +171,46 @@ void init_tim1() {
   TIM1->CHCTLR1 |= TIM_OC1M_2 | TIM_OC1M_1;
 
   // Set the Capture Compare Register value to 50% initially
-  TIM1->CH1CVR = 128;
+  TIM1->CH1CVR = color_temperature;
 
   // Enable TIM1 outputs
   TIM1->BDTR |= TIM_MOE;
 
   // Enable TIM1
   TIM1->CTLR1 |= TIM_CEN;
+}
+
+void init_tim2() {
+  RCC->APB1PCENR |= RCC_APB1Periph_TIM2;
+
+  // PD4 is T2CH1, 10MHz Output alt func, push-pull
+  GPIOD->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 4);
+
+  // Reset TIM2 to init all regs
+  RCC->APB1PRSTR |= RCC_APB1Periph_TIM2;
+  RCC->APB1PRSTR &= ~RCC_APB1Periph_TIM2;
+
+  TIM2->PSC = 0x00ff;
+
+  // Auto Reload - sets period
+  TIM2->ATRLR = 255;
+
+  TIM2->SWEVGR |= TIM_UG;
+
+  // Enable CH1 output, positive pol
+  TIM2->CCER |= TIM_CC1E | TIM_CC1P;
+
+  // CH1 Mode is output, PWM1 (CC1S = 00, OC1M = 110)
+  TIM2->CHCTLR1 |= TIM_OC1M_2 | TIM_OC1M_1;
+
+  // Set the Capture Compare Register value to 50% initially
+  TIM2->CH1CVR = luminance;
+
+  // Enable TIM2 outputs
+  TIM2->BDTR |= TIM_MOE;
+
+  // Enable TIM2
+  TIM2->CTLR1 |= TIM_CEN;
 }
 
 void init_btns() {
@@ -211,6 +245,8 @@ int main() {
   init_systick();
 
   init_tim1();
+
+  init_tim2();
 
   init_btns();
 
