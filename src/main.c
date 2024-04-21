@@ -218,10 +218,17 @@ void init_btns() {
   RCC->APB2PCENR |= RCC_APB2Periph_GPIOC | RCC_APB2Periph_AFIO;
 
   // GPIO C0. C1, C2, C3 Push-Pull
+  GPIOC->CFGLR &= ~(0xf << (4 * 0));
   GPIOC->CFGLR |= (GPIO_Speed_In | GPIO_CNF_IN_PUPD) << (4 * 0);
+  GPIOC->CFGLR &= ~(0xf << (4 * 1));
   GPIOC->CFGLR |= (GPIO_Speed_In | GPIO_CNF_IN_PUPD) << (4 * 1);
+  GPIOC->CFGLR &= ~(0xf << (4 * 2));
   GPIOC->CFGLR |= (GPIO_Speed_In | GPIO_CNF_IN_PUPD) << (4 * 2);
+  GPIOC->CFGLR &= ~(0xf << (4 * 3));
   GPIOC->CFGLR |= (GPIO_Speed_In | GPIO_CNF_IN_PUPD) << (4 * 3);
+
+  // GPIO C0, C1, C2, C3 Pull-Up
+  GPIOC->OUTDR |= GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_2 | GPIO_Pin_3;
 
   // Enable interruptions for PC0, PC1, PC2, PC3
   AFIO->EXTICR |= 2 << 0;
