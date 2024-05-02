@@ -231,10 +231,10 @@ void init_btns() {
   GPIOC->OUTDR |= GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_2 | GPIO_Pin_3;
 
   // Enable interruptions for PC0, PC1, PC2, PC3
-  AFIO->EXTICR |= 2 << 0;
-  AFIO->EXTICR |= 2 << 2;
-  AFIO->EXTICR |= 2 << 4;
-  AFIO->EXTICR |= 2 << 6;
+  AFIO->EXTICR |= AFIO_EXTICR_EXTI0_PC;
+  AFIO->EXTICR |= AFIO_EXTICR_EXTI1_PC;
+  AFIO->EXTICR |= AFIO_EXTICR_EXTI2_PC;
+  AFIO->EXTICR |= AFIO_EXTICR_EXTI3_PC;
 
   // Enable interruptions
   EXTI->INTENR |=
