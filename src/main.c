@@ -141,8 +141,10 @@ void init_tim1() {
   RCC->APB2PCENR |= RCC_APB2Periph_GPIOD | RCC_APB2Periph_TIM1;
 
   // PD0 is T1CH1N, 10MHz Output alt func, push-pull
+  GPIOD->CFGLR &= ~(0xf << (4 * 0));
   GPIOD->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 0);
   // PD2 is T1CH1, 10MHz Output alt func, push-pull
+  GPIOD->CFGLR &= ~(0xf << (4 * 2));
   GPIOD->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 2);
 
   // Reset TIM1 to init all regs
@@ -153,7 +155,7 @@ void init_tim1() {
   // SMCFGR: default clk input is CK_INT
 
   // Prescaler
-  TIM1->PSC = 0x000f;
+  TIM1->PSC = 0x0001;
 
   // Auto Reload - sets period
   TIM1->ATRLR = 255;
@@ -184,7 +186,8 @@ void init_tim2() {
   RCC->APB1PCENR |= RCC_APB1Periph_TIM2;
 
   // PD4 is T2CH1, 10MHz Output alt func, push-pull
-  GPIOD->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 4);
+  GPIOD->CFGLR &= ~(0xf << (4 * 4));
+  GPIOD->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_OD_AF) << (4 * 4);
 
   // Reset TIM2 to init all regs
   RCC->APB1PRSTR |= RCC_APB1Periph_TIM2;
