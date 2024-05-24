@@ -27,14 +27,18 @@ enum {
 
 uint32_t count;
 
-u16 color_temperature = 127;
+const u32 max_duty_cycle = 2048;
+const u32 max_luminance = 256;
+const u32 max_temperature = 64;
+
+u32 color_temperature = max_temperature / 2;
 u32 color_temperature_btn_downed_at = 0;
 
-u16 luminance = 127;
+u32 luminance = max_luminance / 4;
 u32 luminance_btn_downed_at = 0;
 
-u16 warm_value = 20;
-u16 cool_value = 20;
+u32 warm_value = 20;
+u32 cool_value = 20;
 
 btn_mark_t tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
 
@@ -56,10 +60,10 @@ void set_btn_long_press_irq_tick() {
   if ((ct_w || ct_c) && (l_l || l_d)) {
     if (color_temperature_btn_downed_at < luminance_btn_downed_at) {
       tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
-      SysTick->CMP = color_temperature_btn_downed_at + 200000;
+      SysTick->CMP = color_temperature_btn_downed_at + 500000;
     } else {
       tick_btn_mark = BTN_MARK_LUMINANCE;
-      SysTick->CMP = luminance_btn_downed_at + 200000;
+      SysTick->CMP = luminance_btn_downed_at + 500000;
     }
 
     if (SysTick->CMP < SysTick->CNT) {
@@ -70,10 +74,10 @@ void set_btn_long_press_irq_tick() {
 
   if (ct_w || ct_c) {
     tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
-    SysTick->CMP = color_temperature_btn_downed_at + 200000;
+    SysTick->CMP = color_temperature_btn_downed_at + 500000;
   } else if (l_l || l_d) {
     tick_btn_mark = BTN_MARK_LUMINANCE;
-    SysTick->CMP = luminance_btn_downed_at + 200000;
+    SysTick->CMP = luminance_btn_downed_at + 500000;
   }
 }
 
@@ -88,7 +92,7 @@ void btns_down(btn_mark_t btn_mark) {
     }
 
     if ((GPIOD->INDR & GPIO_Pin_Cool) == 0) {
-      if (color_temperature < 255) {
+      if (color_temperature < max_temperature) {
         color_temperature++;
       }
       color_temperature_btn_downed_at = SysTick->CNT;
@@ -104,28 +108,22 @@ void btns_down(btn_mark_t btn_mark) {
     }
 
     if ((GPIOD->INDR & GPIO_Pin_Light) == 0) {
-      if (luminance < 255) {
+      if (luminance < max_luminance) {
         luminance++;
       }
       luminance_btn_downed_at = SysTick->CNT;
       set_btn_long_press_irq_tick();
     }
   }
-  warm_value = (u32)color_temperature * (u32)luminance / 255;
-  cool_value = luminance - warm_value;
+  warm_value = color_temperature * luminance * max_duty_cycle / max_luminance /
+               max_temperature;
+  cool_value = max_duty_cycle * luminance / max_luminance - warm_value;
 
   TIM1->CH1CVR = cool_value;
   TIM1->CH3CVR = warm_value;
 }
 
 void EXTI7_0_IRQHandler(void) {
-  printf("EXTI7_0_IRQHandler, %d, %d, %d, %d, %d, %d \n",
-         EXTI->INTFR & EXTI_INTENR_MR6 ? 1 : 0,
-         EXTI->INTFR & EXTI_INTENR_MR5 ? 1 : 0,
-         EXTI->INTFR & EXTI_INTENR_MR4 ? 1 : 0,
-         EXTI->INTFR & EXTI_INTENR_MR3 ? 1 : 0,
-         EXTI->INTFR & EXTI_INTENR_MR2 ? 1 : 0,
-         EXTI->INTFR & EXTI_INTENR_MR1 ? 1 : 0);
   if ((EXTI->INTFR & EXTI_INTENR_MR5) || (EXTI->INTFR & EXTI_INTENR_MR3)) {
     btns_down(BTN_MARK_COLOR_TEMPERATURE);
   }
@@ -168,10 +166,10 @@ void init_tim1() {
   // SMCFGR: default clk input is CK_INT
 
   // Prescaler
-  TIM1->PSC = 0x00ff;
+  TIM1->PSC = 0x0000;
 
   // Auto Reload - sets period
-  TIM1->ATRLR = 255;
+  TIM1->ATRLR = max_duty_cycle;
 
   // Reload immediately
   TIM1->SWEVGR |= TIM_UG;
@@ -188,11 +186,14 @@ void init_tim1() {
   // CH3 Mode is output, PWM1 (CC3S = 00, OC3M = 110)
   TIM1->CHCTLR2 |= TIM_OC3M_2 | TIM_OC3M_1;
 
-  // Set the Capture Compare Register value
-  TIM1->CH1CVR = warm_value;
+  // // Set the Capture Compare Register value
+  // TIM1->CH1CVR = warm_value / 4;
+
+  // // Set the Capture Compare Register value
+  // TIM1->CH3CVR = cool_value / 4;
 
   // Set the Capture Compare Register value
-  TIM1->CH3CVR = cool_value;
+  btns_down(BTN_MARK_COLOR_TEMPERATURE);
 
   // Enable TIM1 outputs
   TIM1->BDTR |= TIM_MOE;
@@ -266,12 +267,13 @@ int main() {
 
     // output bits
 
-    // printf("color_temperature: %d, luminance: %d. W: %d, C: %d, ticks: %lu
-    // \n",
-    //        color_temperature, luminance, warm_value, cool_value,
-    //        SysTick->CNT);
-
-    printf("PD5, %d \n", GPIOD->INDR & GPIO_Pin_5 ? 1 : 0);
+    printf(
+        "color_temperature: %ld, luminance: %ld. W: %ld, C: %ld, W: %ld, C: "
+        "%ld, "
+        "ticks: %lu "
+        "\n ",
+        color_temperature, luminance, warm_value, cool_value, TIM1->CH3CVR,
+        TIM1->CH1CVR, SysTick->CNT);
 
     Delay_Ms(250);
   }
