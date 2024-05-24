@@ -28,8 +28,8 @@ enum {
 uint32_t count;
 
 const u32 max_duty_cycle = 2048;
-const u32 max_luminance = 256;
-const u32 max_temperature = 64;
+const u32 max_luminance = 512;
+const u32 max_temperature = 128;
 
 u32 color_temperature = max_temperature / 2;
 u32 color_temperature_btn_downed_at = 0;
@@ -37,8 +37,8 @@ u32 color_temperature_btn_downed_at = 0;
 u32 luminance = max_luminance / 4;
 u32 luminance_btn_downed_at = 0;
 
-u32 warm_value = 20;
-u32 cool_value = 20;
+u32 warm_value = 0;
+u32 cool_value = 0;
 
 btn_mark_t tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
 
@@ -60,10 +60,10 @@ void set_btn_long_press_irq_tick() {
   if ((ct_w || ct_c) && (l_l || l_d)) {
     if (color_temperature_btn_downed_at < luminance_btn_downed_at) {
       tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
-      SysTick->CMP = color_temperature_btn_downed_at + 500000;
+      SysTick->CMP = color_temperature_btn_downed_at + 100000;
     } else {
       tick_btn_mark = BTN_MARK_LUMINANCE;
-      SysTick->CMP = luminance_btn_downed_at + 500000;
+      SysTick->CMP = luminance_btn_downed_at + 100000;
     }
 
     if (SysTick->CMP < SysTick->CNT) {
@@ -74,10 +74,10 @@ void set_btn_long_press_irq_tick() {
 
   if (ct_w || ct_c) {
     tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
-    SysTick->CMP = color_temperature_btn_downed_at + 500000;
+    SysTick->CMP = color_temperature_btn_downed_at + 100000;
   } else if (l_l || l_d) {
     tick_btn_mark = BTN_MARK_LUMINANCE;
-    SysTick->CMP = luminance_btn_downed_at + 500000;
+    SysTick->CMP = luminance_btn_downed_at + 100000;
   }
 }
 
@@ -186,14 +186,11 @@ void init_tim1() {
   // CH3 Mode is output, PWM1 (CC3S = 00, OC3M = 110)
   TIM1->CHCTLR2 |= TIM_OC3M_2 | TIM_OC3M_1;
 
-  // // Set the Capture Compare Register value
-  // TIM1->CH1CVR = warm_value / 4;
-
-  // // Set the Capture Compare Register value
-  // TIM1->CH3CVR = cool_value / 4;
+  // Set the Capture Compare Register value
+  TIM1->CH1CVR = 0;
 
   // Set the Capture Compare Register value
-  btns_down(BTN_MARK_COLOR_TEMPERATURE);
+  TIM1->CH3CVR = 0;
 
   // Enable TIM1 outputs
   TIM1->BDTR |= TIM_MOE;
@@ -260,6 +257,13 @@ int main() {
 
   // Enable interrupt handler for SysTick
   NVIC_EnableIRQ(SysTicK_IRQn);
+
+  // fade in
+  for (u32 i = 0; i < max_luminance / 4; i++) {
+    luminance = i;
+    btns_down(BTN_MARK_LUMINANCE);
+    Delay_Ms(10);
+  }
 
   while (1) {
     // u8 gpio_c0 = GPIOC->INDR & GPIO_INDR_IDR0;
