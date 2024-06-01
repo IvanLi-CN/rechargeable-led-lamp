@@ -3,6 +3,8 @@
 #include <stdio.h>
 
 #include "ch32v003fun.h"
+#include "gx21m15.h"
+#include "i2c.h"
 
 #define SYSTICK_SR_CNTIF (1 << 0)
 #define SYSTICK_CTLR_STE (1 << 0)
@@ -254,9 +256,15 @@ int main() {
 
   init_btns();
   init_tim1();
+  init_i2c();
 
   // Enable interrupt handler for SysTick
   NVIC_EnableIRQ(SysTicK_IRQn);
+
+  gx21m15_init();
+  u16 temperature = 0;
+  gx21m15_read(&temperature);
+  printf("Temperature: %d\n", temperature);
 
   // fade in
   for (u32 i = 0; i < max_luminance / 4; i++) {
@@ -266,19 +274,19 @@ int main() {
   }
 
   while (1) {
-    // u8 gpio_c0 = GPIOC->INDR & GPIO_INDR_IDR0;
-    // u8 gpio_c1 = GPIOC->INDR & GPIO_INDR_IDR1 >> 1;
-
     // output bits
 
-    printf(
-        "color_temperature: %ld, luminance: %ld. W: %ld, C: %ld, W: %ld, C: "
-        "%ld, "
-        "ticks: %lu "
-        "\n ",
-        color_temperature, luminance, warm_value, cool_value, TIM1->CH3CVR,
-        TIM1->CH1CVR, SysTick->CNT);
+    // printf(
+    //     "color_temperature: %ld, luminance: %ld. W: %ld, C: %ld, W: %ld, C: "
+    //     "%ld, "
+    //     "ticks: %lu "
+    //     "\n ",
+    //     color_temperature, luminance, warm_value, cool_value, TIM1->CH3CVR,
+    //     TIM1->CH1CVR, SysTick->CNT);
 
-    Delay_Ms(250);
+    gx21m15_read(&temperature);
+    printf("Temperature: %d\n", temperature);
+
+    Delay_Ms(2000);
   }
 }
