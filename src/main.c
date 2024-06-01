@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "bq25890h.h"
 #include "ch32v003fun.h"
 #include "gx21m15.h"
 #include "i2c.h"
@@ -262,9 +263,9 @@ int main() {
   NVIC_EnableIRQ(SysTicK_IRQn);
 
   gx21m15_init();
-  u16 temperature = 0;
-  gx21m15_read(&temperature);
-  printf("Temperature: %d\n", temperature);
+  bq25890h_init();
+
+  u8 buf = 0;
 
   // fade in
   for (u32 i = 0; i < max_luminance / 4; i++) {
@@ -284,6 +285,46 @@ int main() {
     //     color_temperature, luminance, warm_value, cool_value, TIM1->CH3CVR,
     //     TIM1->CH1CVR, SysTick->CNT);
 
+    // gx21m15_read(&temperature);
+    // printf("Temperature: %d\n", temperature);
+
+    if (bq25890h_get_charge_status(&buf)) {
+      printf("Get charge status failed\n");
+    } else {
+      printf("Charge status: %d\n", buf);
+    }
+
+    if (bq25890h_get_charge_fault(&buf)) {
+      printf("Get charge fault failed\n");
+    } else {
+      printf("Charge fault: %d\n", buf);
+    }
+
+    if (bq25890h_get_battery_voltage(&buf)) {
+      printf("Get battery voltage failed\n");
+    } else {
+      printf("Battery voltage: %x\n", buf);
+    }
+
+    if (bq25890h_get_sys_voltage(&buf)) {
+      printf("Get system voltage failed\n");
+    } else {
+      printf("System voltage: %x\n", buf);
+    }
+
+    if (bq25890h_get_thermal_shutdown(&buf)) {
+      printf("Get thermal shutdown failed\n");
+    } else {
+      printf("Thermal shutdown: %x\n", buf);
+    }
+
+    if (bq25890h_get_charge_current(&buf)) {
+      printf("Get charge current failed\n");
+    } else {
+      printf("Charge current: %x\n", buf);
+    }
+
+    u16 temperature = 0;
     gx21m15_read(&temperature);
     printf("Temperature: %d\n", temperature);
 

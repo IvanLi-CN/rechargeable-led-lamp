@@ -1,4 +1,6 @@
-#include "ch32v003fun.h"
+#ifndef GX21M15_H
+#define GX21M15_H
+
 #include "i2c.h"
 
 #define GX21M15_ADDR 0x48       // 0b1001000x
@@ -7,7 +9,7 @@
 #define GX21M15_REG_TOS 0x03    // Over-temperature shutdown
 #define GX21M15_REG_THYST 0x02  // Hysteresis
 
-void gx21m15_init() {
+void bq25890h_init() {
   u8 buf[3];
   u8 err;
 
@@ -36,16 +38,16 @@ void gx21m15_init() {
   buf[1] = 0b00010010;
   i2c_send(GX21M15_ADDR, buf, 2);
   if (err) {
-    printf("Set config failed\n\r");
+    printf("Set config failed\n");
   }
 
-  printf("GX21M15 initialized\n\r");
+  printf("GX21M15 initialized\n");
 }
 
 u8 gx21m15_read(u16 *temp) {
   u8 buf[2] = {0, 0};
   if (i2c_recv(GX21M15_ADDR, GX21M15_REG_TEMP, buf, 2)) {
-    printf("Read temperature failed\n\r");
+    printf("Read temperature failed\n");
     return 1;
   }
 
@@ -53,3 +55,5 @@ u8 gx21m15_read(u16 *temp) {
   *temp *= 125;
   return 0;
 }
+
+#endif
