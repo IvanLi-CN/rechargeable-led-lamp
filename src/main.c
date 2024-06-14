@@ -28,8 +28,6 @@ enum {
   BTN_MARK_LUMINANCE = 0b10,
 } typedef btn_mark_t;
 
-uint32_t count;
-
 const u32 max_duty_cycle = 2048;
 const u32 max_luminance = 512;
 const u32 max_temperature = 128;
@@ -37,11 +35,13 @@ const u32 max_temperature = 128;
 u32 color_temperature = max_temperature / 2;
 u32 color_temperature_btn_downed_at = 0;
 
-u32 luminance = max_luminance / 4;
+u32 luminance = 0;
 u32 luminance_btn_downed_at = 0;
 
 u32 warm_value = 0;
 u32 cool_value = 0;
+
+u16 temperature = 0;
 
 btn_mark_t tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
 
@@ -66,7 +66,7 @@ void set_btn_long_press_irq_tick() {
       SysTick->CMP = color_temperature_btn_downed_at + 100000;
     } else {
       tick_btn_mark = BTN_MARK_LUMINANCE;
-      SysTick->CMP = luminance_btn_downed_at + 100000;
+      SysTick->CMP = luminance_btn_downed_at + 50000;
     }
 
     if (SysTick->CMP < SysTick->CNT) {
@@ -80,7 +80,7 @@ void set_btn_long_press_irq_tick() {
     SysTick->CMP = color_temperature_btn_downed_at + 100000;
   } else if (l_l || l_d) {
     tick_btn_mark = BTN_MARK_LUMINANCE;
-    SysTick->CMP = luminance_btn_downed_at + 100000;
+    SysTick->CMP = luminance_btn_downed_at + 50000;
   }
 }
 
@@ -122,6 +122,11 @@ void btns_down(btn_mark_t btn_mark) {
                max_temperature;
   cool_value = max_duty_cycle * luminance / max_luminance - warm_value;
 
+  cool_value = cool_value * cool_value * (cool_value / 3) / max_duty_cycle /
+               (max_duty_cycle / 3);
+  warm_value = warm_value * warm_value * (warm_value / 3) / max_duty_cycle /
+               (max_duty_cycle / 3);
+
   TIM1->CH1CVR = cool_value;
   TIM1->CH3CVR = warm_value;
 }
@@ -161,6 +166,10 @@ void init_tim1() {
   GPIOC->CFGLR &= ~(0xf << (4 * 3));
   GPIOC->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 3);
 
+  // PC4 is T1CH4, 10MHz Output alt func, push-pull
+  GPIOC->CFGLR &= ~(0xf << (4 * 4));
+  GPIOC->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 4);
+
   // Reset TIM1 to init all regs
   RCC->APB2PRSTR |= RCC_APB2Periph_TIM1;
   RCC->APB2PRSTR &= ~RCC_APB2Periph_TIM1;
@@ -198,8 +207,55 @@ void init_tim1() {
   // Enable TIM1 outputs
   TIM1->BDTR |= TIM_MOE;
 
+  // CH4 is input, IC1
+  TIM1->CHCTLR2 |= TIM_CC4S_0;
+  TIM1->CHCTLR1 |= TIM_CC2S_1;
+  // Enable CH4 input, Effective rising edge
+  TIM1->CCER |= TIM_CC4E;
+
+  TIM1->SMCFGR |= TIM_TS_2 | TIM_TS_0;
+
+  TIM1->SMCFGR |= TIM_SMS_2;
+
   // Enable TIM1
   TIM1->CTLR1 |= TIM_CEN;
+}
+
+void init_tim2() {
+  RCC->APB2PCENR |= RCC_APB2Periph_GPIOC | RCC_APB2Periph_AFIO;
+  RCC->APB1PCENR |= RCC_APB1Periph_TIM2;
+
+  // set partial remap mode 1 (CH1/ETR/PC5, CH2/PC2, CH3/PD2, CH4/PC1)
+  AFIO->PCFR1 |= AFIO_PCFR1_TIM2_REMAP_PARTIALREMAP1;
+
+  // PC5 is T2CH1, 10MHz Output alt func, push-pull
+  GPIOC->CFGLR &= ~(0xf << (4 * 5));
+  GPIOC->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 5);
+
+  // Reset TIM2 to init all regs
+  RCC->APB1PRSTR |= RCC_APB1Periph_TIM2;
+  RCC->APB1PRSTR &= ~RCC_APB1Periph_TIM2;
+
+  // Prescaler
+  TIM2->PSC = 0x09ff;
+
+  // Auto Reload - sets period
+  TIM2->ATRLR = 255;
+
+  // Reload immediately
+  TIM2->SWEVGR |= TIM_UG;
+
+  // Enable CH1 output, negative pol
+  TIM2->CCER |= TIM_CC1E;
+
+  // CH1 Mode is output, PWM1 (CC1S = 00, OC1M = 110)
+  TIM2->CHCTLR1 |= TIM_OC1M_2 | TIM_OC1M_1;
+
+  // Set the Capture Compare Register value
+  TIM2->CH1CVR = 200;
+
+  // Enable TIM2
+  TIM2->CTLR1 |= TIM_CEN;
 }
 
 void init_btns() {
@@ -257,6 +313,7 @@ int main() {
 
   init_btns();
   init_tim1();
+  init_tim2();
   init_i2c();
 
   // Enable interrupt handler for SysTick
@@ -268,11 +325,11 @@ int main() {
   u8 buf = 0;
 
   // fade in
-  for (u32 i = 0; i < max_luminance / 4; i++) {
-    luminance = i;
-    btns_down(BTN_MARK_LUMINANCE);
-    Delay_Ms(10);
-  }
+  // for (u32 i = 0; i < max_luminance / 4; i++) {
+  //   luminance = i;
+  //   btns_down(BTN_MARK_LUMINANCE);
+  //   Delay_Ms(10);
+  // }
 
   while (1) {
     // output bits
@@ -285,48 +342,67 @@ int main() {
     //     color_temperature, luminance, warm_value, cool_value, TIM1->CH3CVR,
     //     TIM1->CH1CVR, SysTick->CNT);
 
+    gx21m15_read(&temperature);
+    // printf("Temperature: %d\n", temperature);
+
+    // if (bq25890h_get_charge_status(&buf)) {
+    //   printf("Get charge status failed\n");
+    // } else {
+    //   printf("Charge status: %d\n", buf);
+    // }
+
+    // if (bq25890h_get_charge_fault(&buf)) {
+    //   printf("Get charge fault failed\n");
+    // } else {
+    //   printf("Charge fault: %d\n", buf);
+    // }
+
+    // if (bq25890h_get_battery_voltage(&buf)) {
+    //   printf("Get battery voltage failed\n");
+    // } else {
+    //   printf("Battery voltage: %x\n", buf);
+    // }
+
+    // if (bq25890h_get_sys_voltage(&buf)) {
+    //   printf("Get system voltage failed\n");
+    // } else {
+    //   printf("System voltage: %x\n", buf);
+    // }
+
+    // if (bq25890h_get_thermal_shutdown(&buf)) {
+    //   printf("Get thermal shutdown failed\n");
+    // } else {
+    //   printf("Thermal shutdown: %x\n", buf);
+    // }
+
+    // if (bq25890h_get_charge_current(&buf)) {
+    //   printf("Get charge current failed\n");
+    // } else {
+    //   printf("Charge current: %x\n", buf);
+    // }
+
     // gx21m15_read(&temperature);
     // printf("Temperature: %d\n", temperature);
 
-    if (bq25890h_get_charge_status(&buf)) {
-      printf("Get charge status failed\n");
-    } else {
-      printf("Charge status: %d\n", buf);
-    }
+    // printf("TIM1->CH4CVR: %ld\n", TIM1->CH4CVR);
 
-    if (bq25890h_get_charge_fault(&buf)) {
-      printf("Get charge fault failed\n");
-    } else {
-      printf("Charge fault: %d\n", buf);
-    }
+    if (temperature > 35000) {
+      if (temperature < 50000) {
+        // printf("FAN: %ld\n", TIM2->CH1CVR);
+        TIM2->CH1CVR = 10 + ((temperature - 35000) * 240 / 20000);
+      } else {
+        // printf("FAN: FULL\n");
+        TIM2->CH1CVR = 255;
 
-    if (bq25890h_get_battery_voltage(&buf)) {
-      printf("Get battery voltage failed\n");
+        if (temperature > 60000) {
+          luminance = max_luminance / 4;
+          // printf("luminance limit reached\n");
+        }
+      }
     } else {
-      printf("Battery voltage: %x\n", buf);
+      // printf("TIM2->CH1CVR: OFF\n");
+      TIM2->CH1CVR = 0;
     }
-
-    if (bq25890h_get_sys_voltage(&buf)) {
-      printf("Get system voltage failed\n");
-    } else {
-      printf("System voltage: %x\n", buf);
-    }
-
-    if (bq25890h_get_thermal_shutdown(&buf)) {
-      printf("Get thermal shutdown failed\n");
-    } else {
-      printf("Thermal shutdown: %x\n", buf);
-    }
-
-    if (bq25890h_get_charge_current(&buf)) {
-      printf("Get charge current failed\n");
-    } else {
-      printf("Charge current: %x\n", buf);
-    }
-
-    u16 temperature = 0;
-    gx21m15_read(&temperature);
-    printf("Temperature: %d\n", temperature);
 
     Delay_Ms(2000);
   }

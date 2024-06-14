@@ -49,7 +49,7 @@ void gx21m15_init() {
 
   // ADC Continuous Conversion
   buf[0] = BQ25890H_REG02;
-  buf[1] = 0b11011101;
+  buf[1] = 0b11010001;
   err = i2c_send(BQ25890H_ADDR, buf, 2);
   if (err) {
     printf("Set REG02 error: %d\n", err);
@@ -71,7 +71,7 @@ void gx21m15_init() {
     printf("Set REG08 error: %d\n", err);
   }
 
-  printf("Initialized BQ25890H\n");
+  printf("BQ25890H Initialized\n");
 }
 
 #define BQ25890H_NOT_CHARGING 0b00

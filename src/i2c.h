@@ -222,7 +222,7 @@ u8 i2c_recv(u8 addr, u8 reg, u8 *data, u8 size) {
     }
 
     *data++ = I2C1->DATAR;
-    printf("data: %d, p: %d\n", I2C1->DATAR, size);
+    // printf("data: %d, p: %d\n", I2C1->DATAR, size);
   }
 
   // Send stop
