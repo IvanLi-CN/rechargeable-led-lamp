@@ -42,6 +42,7 @@ u32 warm_value = 0;
 u32 cool_value = 0;
 
 u16 temperature = 0;
+u32 temperature_corrected = 0;
 
 btn_mark_t tick_btn_mark = BTN_MARK_COLOR_TEMPERATURE;
 
@@ -118,14 +119,12 @@ void btns_down(btn_mark_t btn_mark) {
       set_btn_long_press_irq_tick();
     }
   }
-  warm_value = color_temperature * luminance * max_duty_cycle / max_luminance /
-               max_temperature;
-  cool_value = max_duty_cycle * luminance / max_luminance - warm_value;
-
-  cool_value = cool_value * cool_value * (cool_value / 3) / max_duty_cycle /
-               (max_duty_cycle / 3);
-  warm_value = warm_value * warm_value * (warm_value / 3) / max_duty_cycle /
-               (max_duty_cycle / 3);
+  temperature_corrected = luminance * luminance * (luminance / 3) /
+                          max_luminance / (max_luminance / 3);
+  warm_value = color_temperature * temperature_corrected * max_duty_cycle /
+               max_luminance / max_temperature;
+  cool_value =
+      max_duty_cycle * temperature_corrected / max_luminance - warm_value;
 
   TIM1->CH1CVR = cool_value;
   TIM1->CH3CVR = warm_value;
